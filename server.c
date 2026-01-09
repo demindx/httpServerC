@@ -1,15 +1,23 @@
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include "server.h"
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <errno.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "http.h"
-#include "server.h"
 
 struct HttpServer {
   int socket;
+
   struct sockaddr_in addr;
   Router *router;
 };
@@ -21,9 +29,59 @@ struct Route {
   struct Route *next;
 };
 
+struct HandleParam {
+  int client_fd;
+  HttpServer * server;
+};
+
 struct Router {
   struct Route *routes;
 };
+
+static sig_atomic_t shouldRun; 
+
+static void signalHandler(int signo) {
+  if(signo == SIGTERM) {
+    signal(signo, SIG_IGN); /* prevent duplicate calls */
+    shouldRun = 0; 
+  }
+}
+
+static void* handle(void * arg) {
+  struct HandleParam* params = (struct HandleParam*) arg;
+
+  if(!params->server)
+    return 0;
+  
+  if(params->client_fd <= 0)
+    return 0;
+
+  fprintf(stderr, "[%02x] handling a connection\n", pthread_self());
+  while(1) {
+    char buff[255] = {0};
+    int r = read(params->client_fd, buff, sizeof(buff));
+    if(r == -1) {
+      if(errno == EINTR) {
+        if(!shouldRun) {
+          break; 
+	      }
+        continue; /* ignore generic interrupt */
+      } 
+      
+      perror("failed to read from connection");
+      break;
+    }
+
+    if(r == 0)
+      break; /* EOF */
+        
+    fprintf(stderr, "[%02x] read from connection: '%s'\n", pthread_self(), buff);
+  }
+
+  close(params->client_fd);
+  fprintf(stderr, "[%02x] connection closed\n", pthread_self());
+  return 0;
+}
 
 struct Route *createRoute(HttpMethod method, char *uri,
                           void (*handler)(Request *)) {
@@ -167,27 +225,32 @@ void freeRouter(Router *router) {
 }
 
 void serve(HttpServer *server) {
+  shouldRun = 1;
   if (listen(server->socket, 5) != 0) {
     perror("Error while trying to listen socket: ");
     return;
   }
 
+  /* TODO: use sigaction */
+  signal(SIGTERM, signalHandler);
+  
   int client_fd;
   struct sockaddr_in client_addr;
   socklen_t client_addr_len = sizeof(client_addr);
   memset(&client_addr, 0, sizeof(client_addr));
 
-  while (1) {
+  while (shouldRun) {
     if ((client_fd = accept(server->socket, (struct sockaddr *)&client_addr,
                             &client_addr_len)) < 0) {
       perror("Error while accepting connection: ");
       break;
     }
 
-    char buff[30000];
+    pthread_t thread = {0};
+    pthread_create(&thread, 0, handle,
+	    &(struct HandleParam) {client_fd, server});
 
-    recv(client_fd, &buff, 30000, 0);
-
-    printf("%s", buff);
+    /* TODO: keep references to handler threads, and join them
+     * before terminating */
   }
 }
