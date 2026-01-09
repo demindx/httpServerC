@@ -122,18 +122,23 @@ HttpServer *createServer(char *addr, int port) {
   if ((server->socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
     perror("Error while creating socket: ");
     free(server);
-
     return NULL;
   }
 
   server->addr.sin_family = AF_INET;
   server->addr.sin_port = htons(port);
   server->addr.sin_addr.s_addr = inet_addr(addr);
+  
+  if(server->addr.sin_addr.s_addr == INADDR_NONE) {
+    fprintf(stderr, "Invalid inet address\n");
+    free(server);
+    return NULL;	
+  }
 
   if (bind(server->socket, (struct sockaddr *)&server->addr,
            sizeof(server->addr)) != 0) {
     perror("Error while binding socket: ");
-
+    free(server);
     return NULL;
   }
 
