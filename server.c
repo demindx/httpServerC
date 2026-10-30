@@ -1,10 +1,12 @@
 #include "server.h"
 #include "http.h"
+#include "router.h"
 #include "stream.h"
 
 #include <assert.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,22 +51,23 @@ static void *handle(void *arg) {
   fprintf(stdout, "[%02lx] handling a connection\n", pthread_self());
   fflush(stdout);
 
-  while (1) {
-    char buff[BUFF_SIZE];
-    memset(buff, 0, BUFF_SIZE);
+  bool run = true;
 
-		Stream *stream = createStream(params->client_fd);
-		Request *request = readRequest(stream);
-		if (!request) continue;
-		fprintf(stdout, "%d %s %s\n", request->method, request->version, request->uri);
-    int r = read(params->client_fd, buff, sizeof(buff));
+  while (run) {
+    Stream *stream = createStream(params->client_fd);
 
-		if (r == 0) {
-			continue;
-		}
+    Request *request = readRequest(stream);
 
-    fprintf(stdout, "[%02lx] read from connection: '%s'\n", pthread_self(),
-            buff);
+    if (!request)
+      continue;
+
+    Route *route = getRouteByUri(params->server->router, request->uri);
+
+    if (route->method == request->method) {
+      route->handler(request);
+
+			run = false;
+    }
   }
 
   close(params->client_fd);

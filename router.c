@@ -3,19 +3,12 @@
 #include <string.h>
 #include "router.h"
 
-struct Route {
-  HttpMethod method;
-  char *uri;
-  void (*handler)(Request *);
-  struct Route *next;
-};
-
 struct Router {
-  struct Route *routes;
+  Route *routes;
 };
 
 
-struct Route *createRoute(HttpMethod method, char *uri,
+Route *createRoute(HttpMethod method, char *uri,
                           void (*handler)(Request *)) {
   if (uri == NULL) {
     fprintf(stderr, "Incorrect uri\n");
@@ -27,7 +20,7 @@ struct Route *createRoute(HttpMethod method, char *uri,
     return NULL;
   }
 
-  struct Route *route = (struct Route *)malloc(sizeof(struct Route));
+  Route *route = (Route *)malloc(sizeof(Route));
 
   if (route == NULL) {
     perror("Error while allocating route: ");
@@ -83,7 +76,7 @@ int registerRoute(Router *router, HttpMethod method, char *uri,
     return 0;
   }
 
-  struct Route *ptr = router->routes;
+  Route *ptr = router->routes;
 
   while (ptr->next != NULL) {
     ptr = ptr->next;
@@ -96,14 +89,30 @@ int registerRoute(Router *router, HttpMethod method, char *uri,
 
 
 void freeRouter(Router *router) {
-  struct Route *route = router->routes;
+  Route *route = router->routes;
 
   while (route != NULL) {
-    struct Route *tmp = route;
+    Route *tmp = route;
     route = route->next;
     free(tmp->uri);
     free(tmp);
   }
 
   free(router);
+}
+
+
+Route *getRouteByUri(Router *router, char *uri) {
+	Route *route = router->routes;
+
+	while (route != NULL) {
+		Route *tmp = route;
+		route = route->next;
+
+		if (strcmp(tmp->uri, uri) == 0) {
+			return tmp;
+		}
+	}
+
+	return NULL;
 }
