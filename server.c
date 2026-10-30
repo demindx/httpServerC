@@ -1,19 +1,20 @@
 #include "server.h"
+#include "http.h"
+#include "stream.h"
 
 #include <assert.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
-#include <pthread.h>
 #include <unistd.h>
-#include <errno.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#include "http.h"
+#define BUFF_SIZE 8192
 
 struct HttpServer {
   int socket;
@@ -22,142 +23,53 @@ struct HttpServer {
   Router *router;
 };
 
-struct Route {
-  HttpMethod method;
-  char *uri;
-  void (*handler)(Request *);
-  struct Route *next;
-};
-
 struct HandleParam {
   int client_fd;
-  HttpServer * server;
+  HttpServer *server;
 };
 
-struct Router {
-  struct Route *routes;
-};
-
-static sig_atomic_t shouldRun; 
+static sig_atomic_t shouldRun;
 
 static void signalHandler(int signo) {
-  if(signo == SIGTERM) {
-    signal(signo, SIG_IGN); /* prevent duplicate calls */
-    shouldRun = 0; 
+  if (signo == SIGTERM) {
+    signal(signo, SIG_IGN);
+    shouldRun = 0;
   }
 }
 
-static void* handle(void * arg) {
-  struct HandleParam* params = (struct HandleParam*) arg;
+static void *handle(void *arg) {
+  struct HandleParam *params = (struct HandleParam *)arg;
 
-  if(!params->server)
-    return 0;
-  
-  if(params->client_fd <= 0)
+  if (!params->server)
     return 0;
 
-  fprintf(stderr, "[%02x] handling a connection\n", pthread_self());
-  while(1) {
-    char buff[255] = {0};
+  if (params->client_fd <= 0)
+    return 0;
+
+  fprintf(stdout, "[%02lx] handling a connection\n", pthread_self());
+  fflush(stdout);
+
+  while (1) {
+    char buff[BUFF_SIZE];
+    memset(buff, 0, BUFF_SIZE);
+
+		Stream *stream = createStream(params->client_fd);
+		Request *request = readRequest(stream);
+		if (!request) continue;
+		fprintf(stdout, "%d %s %s\n", request->method, request->version, request->uri);
     int r = read(params->client_fd, buff, sizeof(buff));
-    if(r == -1) {
-      if(errno == EINTR) {
-        if(!shouldRun) {
-          break; 
-	      }
-        continue; /* ignore generic interrupt */
-      } 
-      
-      perror("failed to read from connection");
-      break;
-    }
 
-    if(r == 0)
-      break; /* EOF */
-        
-    fprintf(stderr, "[%02x] read from connection: '%s'\n", pthread_self(), buff);
+		if (r == 0) {
+			continue;
+		}
+
+    fprintf(stdout, "[%02lx] read from connection: '%s'\n", pthread_self(),
+            buff);
   }
 
   close(params->client_fd);
-  fprintf(stderr, "[%02x] connection closed\n", pthread_self());
+  fprintf(stdout, "[%02lx] connection closed\n", pthread_self());
   return 0;
-}
-
-struct Route *createRoute(HttpMethod method, char *uri,
-                          void (*handler)(Request *)) {
-  if (uri == NULL) {
-    fprintf(stderr, "Incorrect uri\n");
-    return NULL;
-  }
-
-  if (handler == NULL) {
-    fprintf(stderr, "Handler is NULL\n");
-    return NULL;
-  }
-
-  struct Route *route = (struct Route *)malloc(sizeof(struct Route));
-
-  if (route == NULL) {
-    perror("Error while allocating route: ");
-    return NULL;
-  }
-
-  route->uri = strdup(uri);
-  if (route->uri == NULL) {
-    perror("Error while copy uri to route: ");
-    free(route);
-    return NULL;
-  }
-
-  route->handler = handler;
-
-  return route;
-}
-
-Router *craeteRouter() {
-  Router *router = (Router *)malloc(sizeof(Router));
-  if (router == NULL) {
-    perror("Error while allocating Router: ");
-    return NULL;
-  }
-
-  router->routes = NULL;
-
-  return router;
-}
-
-int registerRoute(Router *router, HttpMethod method, char *uri,
-                  void (*handler)(Request *)) {
-  if (router == NULL) {
-    fprintf(stderr, "Router cannot be NULL\n");
-    return 0;
-  }
-
-  if (uri == NULL) {
-    fprintf(stderr, "Incorrect uri\n");
-    return 0;
-  }
-
-  if (handler == NULL) {
-    fprintf(stderr, "Handler is NULL\n");
-    return 0;
-  }
-
-  if (router->routes == NULL) {
-    router->routes = createRoute(method, uri, handler);
-
-    return 0;
-  }
-
-  struct Route *ptr = router->routes;
-
-  while (ptr->next != NULL) {
-    ptr = ptr->next;
-  }
-
-  ptr->next = createRoute(method, uri, handler);
-
-  return 1;
 }
 
 HttpServer *createServer(char *addr, int port) {
@@ -186,11 +98,11 @@ HttpServer *createServer(char *addr, int port) {
   server->addr.sin_family = AF_INET;
   server->addr.sin_port = htons(port);
   server->addr.sin_addr.s_addr = inet_addr(addr);
-  
-  if(server->addr.sin_addr.s_addr == INADDR_NONE) {
+
+  if (server->addr.sin_addr.s_addr == INADDR_NONE) {
     fprintf(stderr, "Invalid inet address\n");
     free(server);
-    return NULL;	
+    return NULL;
   }
 
   if (bind(server->socket, (struct sockaddr *)&server->addr,
@@ -211,19 +123,6 @@ void setRouter(HttpServer *server, Router *router) {
   server->router = router;
 }
 
-void freeRouter(Router *router) {
-  struct Route *route = router->routes;
-
-  while (route != NULL) {
-    struct Route *tmp = route;
-    route = route->next;
-    free(tmp->uri);
-    free(tmp);
-  }
-
-  free(router);
-}
-
 void serve(HttpServer *server) {
   shouldRun = 1;
   if (listen(server->socket, 5) != 0) {
@@ -231,9 +130,8 @@ void serve(HttpServer *server) {
     return;
   }
 
-  /* TODO: use sigaction */
   signal(SIGTERM, signalHandler);
-  
+
   int client_fd;
   struct sockaddr_in client_addr;
   socklen_t client_addr_len = sizeof(client_addr);
@@ -242,13 +140,17 @@ void serve(HttpServer *server) {
   while (shouldRun) {
     if ((client_fd = accept(server->socket, (struct sockaddr *)&client_addr,
                             &client_addr_len)) < 0) {
+
       perror("Error while accepting connection: ");
       break;
     }
 
+    struct HandleParam *args = malloc(sizeof(struct HandleParam));
+    args->client_fd = client_fd;
+    args->server = server;
+
     pthread_t thread = {0};
-    pthread_create(&thread, 0, handle,
-	    &(struct HandleParam) {client_fd, server});
+    pthread_create(&thread, 0, handle, args);
 
     /* TODO: keep references to handler threads, and join them
      * before terminating */

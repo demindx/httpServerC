@@ -1,10 +1,9 @@
-#ifndef HTTP_H
-#define HTTP_H
-
+#pragma once
 
 #include "status.h"
+#include "stream.h"
 
-#define METHODS_LENGTH 9
+#define METHODS_LENGTH 10
 
 typedef enum {
   GET,
@@ -15,21 +14,29 @@ typedef enum {
   HEAD,
   OPTIONS,
   CONNECT,
-  TRACE
+  TRACE,
+  QUERY
 } HttpMethod;
 
 extern char *methods[];
 
 typedef struct Header Header;
-typedef struct Request Request;
+
 typedef struct Response Response;
+
+typedef struct {
+  HttpMethod method;
+  char *uri;
+  char *version;
+
+  Header *header;
+
+  char *body;
+} Request;
 
 Header *createHeader(const char *name, const char *value);
 void addHeader(Header *head, Header *header);
 void freeHeader(Header *head);
 
-Header *readHeader(int sock);
-Request *readRequest(int sock);
+Request *readRequest(Stream *stream);
 Response *createResponse();
-
-#endif

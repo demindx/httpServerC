@@ -8,13 +8,23 @@ void test_handler(Request *request) {
 }
 
 int main() {
-	HttpServer *server = createServer("127.0.0.1", 8080);
+	HttpServer *server = createServer("127.0.0.1", 8082);
+	if (server == NULL) {
+		fprintf(stderr, "Failed to create server\n");
+		return 1;
+	}
+
+	Router *router = createRouter();
+	if (router == NULL) {
+		fprintf(stderr, "Failed to create router\n");
+		return 1;
+	}
+
+	registerRoute(router, GET, "/test", test_handler);
+	setRouter(server, router);
 
 	serve(server);
-	// Router *router = craeteRouter();
-	//
-	// printf("%s\n", methods[0]);
-	// registerRoute(router, GET, "/test", test_handler);
-	//
-	// freeRouter(router);
+
+	freeRouter(router);
+	return 0;
 }
