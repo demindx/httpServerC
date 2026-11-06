@@ -1,15 +1,23 @@
+#include "router.h"
+#include "http.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "router.h"
 
 struct Router {
   Route *routes;
 };
 
+struct Route {
+  HttpMethod method;
+  char *uri;
+  void (*handler)(Request *);
+  struct Route *next;
+};
 
-Route *createRoute(HttpMethod method, char *uri,
-                          void (*handler)(Request *)) {
+Route *getRouteByUri(Router *router, char *uri);
+
+Route *createRoute(HttpMethod method, char *uri, void (*handler)(Request *)) {
   if (uri == NULL) {
     fprintf(stderr, "Incorrect uri\n");
     return NULL;
@@ -51,8 +59,6 @@ Router *createRouter() {
   return router;
 }
 
-
-
 int registerRoute(Router *router, HttpMethod method, char *uri,
                   void (*handler)(Request *)) {
   if (router == NULL) {
@@ -87,7 +93,6 @@ int registerRoute(Router *router, HttpMethod method, char *uri,
   return 1;
 }
 
-
 void freeRouter(Router *router) {
   Route *route = router->routes;
 
@@ -101,18 +106,28 @@ void freeRouter(Router *router) {
   free(router);
 }
 
-
 Route *getRouteByUri(Router *router, char *uri) {
-	Route *route = router->routes;
+  Route *route = router->routes;
 
-	while (route != NULL) {
-		Route *tmp = route;
-		route = route->next;
+  while (route != NULL) {
+    Route *tmp = route;
+    route = route->next;
 
-		if (strcmp(tmp->uri, uri) == 0) {
-			return tmp;
-		}
-	}
+    if (strcmp(tmp->uri, uri) == 0) {
+      return tmp;
+    }
+  }
 
-	return NULL;
+  return NULL;
+}
+
+void callRouteHandler(Request *request, Router *router) {
+  Route *route = getRouteByUri(router, request->uri);
+
+  if (request->method != route->method) {
+    fprintf(stderr, "ERROR: bad request method");
+    return;
+  }
+
+  route->handler(request);
 }

@@ -61,14 +61,13 @@ static void *handle(void *arg) {
     if (!request)
       continue;
 
-    Route *route = getRouteByUri(params->server->router, request->uri);
+    callRouteHandler(request, params->server->router);
 
-    if (route->method == request->method) {
-      route->handler(request);
+		run = false;
 
-			run = false;
-    }
+		freeStream(stream);
   }
+
 
   close(params->client_fd);
   fprintf(stdout, "[%02lx] connection closed\n", pthread_self());

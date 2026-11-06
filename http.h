@@ -22,7 +22,12 @@ extern char *methods[];
 
 typedef struct Header Header;
 
-typedef struct Response Response;
+typedef struct Response {
+  char *version;
+  HttpStatus status;
+
+  char *body;
+} Response;
 
 typedef struct {
   HttpMethod method;

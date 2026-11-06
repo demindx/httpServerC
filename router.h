@@ -3,16 +3,11 @@
 
 typedef struct Router Router;
 
-typedef struct Route{
-  HttpMethod method;
-  char *uri;
-  void (*handler)(Request *);
-  struct Route *next;
-} Route ;
-
+typedef struct Route Route;
 
 Router *createRouter();
 int registerRoute(Router *router, HttpMethod method, char *uri,
                   void (*handler)(Request *));
 void freeRouter(Router *router);
-Route *getRouteByUri(Router * router, char *uri);
+
+void callRouteHandler(Request *request, Router *router);
