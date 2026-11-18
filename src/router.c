@@ -11,13 +11,14 @@ struct Router {
 struct Route {
   HttpMethod method;
   char *uri;
-  void (*handler)(Request *);
+  Response *(*handler)(Request *);
   struct Route *next;
 };
 
 Route *getRouteByUri(Router *router, char *uri);
 
-Route *createRoute(HttpMethod method, char *uri, void (*handler)(Request *)) {
+Route *createRoute(HttpMethod method, char *uri,
+                   Response *(*handler)(Request *)) {
   if (uri == NULL) {
     fprintf(stderr, "Incorrect uri\n");
     return NULL;
@@ -60,7 +61,7 @@ Router *createRouter() {
 }
 
 int registerRoute(Router *router, HttpMethod method, char *uri,
-                  void (*handler)(Request *)) {
+                  Response *(*handler)(Request *)) {
   if (router == NULL) {
     fprintf(stderr, "Router cannot be NULL\n");
     return 0;

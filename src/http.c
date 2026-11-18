@@ -1,3 +1,4 @@
+#include <strings.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,9 +10,9 @@
 
 #include "http.h"
 #include "stream.h"
+#include "arena.h"
 
 #define BUFF_SIZE 8192
-#define CRLF 0x0D0A
 
 char *methods[] = {"GET",  "POST",    "PUT",     "PATCH", "DELETE",
                    "HEAD", "OPTIONS", "CONNECT", "TRACE", "QUERY"};
@@ -24,6 +25,9 @@ struct Header {
   Header *prev;
 };
 
+
+bool isCRLFLine(char *line);
+void printHeader(Header *header);
 int parseRequestLine(Stream *stream, Request *request);
 int parseHeaderLine(Stream *stream, Header *header, char line[BUFF_SIZE]);
 
@@ -114,22 +118,20 @@ Header *readHeader(Stream *stream) {
     addHeader(head, header);
   }
 
-  fflush(stderr);
-
   return head;
 }
 
 Request *readRequest(Stream *stream) {
   Request *request = malloc(sizeof(Request));
   if (request == NULL) {
-    fprintf(stderr, "ERROR(readRequest): cannot alocate request");
+    fprintf(stderr, "ERROR(readRequest): cannot alocate request\n");
     return NULL;
   }
 
   int status = parseRequestLine(stream, request);
   if (status != 0) {
     fprintf(stderr,
-            "ERROR(readRequest): error while parsing the request line: %d",
+            "ERROR(readRequest): error while parsing the request line: %d\n",
             status);
     free(request);
     return NULL;
@@ -137,7 +139,35 @@ Request *readRequest(Stream *stream) {
 
   request->header = readHeader(stream);
 
-  request->body = readToTheEndOfStream(stream);
+
+	char *endptr;
+	char *value = getHeaderValue(request->header, "content-length");
+	if (value == NULL) {
+		return request;
+	}
+
+	long contentLength;
+
+	contentLength = strtol(value, &endptr, 10);
+	if (endptr == value) {
+		fprintf(stderr, "ERROR(Stream): while converting the str to long.\n");
+		freeHeader(request->header);
+		free(request->uri);
+		free(request->version);
+		return NULL;
+	}
+
+	request->body = (char *)malloc(sizeof(char) * (contentLength + 1));
+
+	StreamStatus st;
+	size_t readed = readFromStream(stream, request->body, contentLength, &st);
+
+	if (st != STREAM_OK) {
+		fprintf(stderr, "ERROR(Stream): while reading the body.\n");
+		freeHeader(request->header);
+		free(request->uri);
+		free(request->version);
+	}
 
   return request;
 }
@@ -155,22 +185,9 @@ int parseHttpMethod(char *buff) {
 int parseRequestLine(Stream *stream, Request *request) {
   char line[BUFF_SIZE];
 
-  for (;;) {
-    int c = consumeLine(stream, line, BUFF_SIZE);
-
-    if (c > 0) {
-      break;
-    }
-
-    if (c < 0) {
-      return -1;
-    }
-
-    int f = fillStream(stream);
-
-    if (f != 1) {
-      return -1;
-    }
+  if (consumeLine(stream, line, BUFF_SIZE) != STREAM_OK) {
+    fprintf(stderr, "ERROR: consumeLine\n");
+    return -1;
   }
 
   char *method = line;
@@ -185,6 +202,10 @@ int parseRequestLine(Stream *stream, Request *request) {
     return -1;
   }
   *version++ = '\0';
+
+	// strip the CRLF
+	version[strlen(version) - 2] = '\0';
+
 
   request->method = getMethod(method);
   request->version = strdup(version);
@@ -204,19 +225,15 @@ HttpMethod getMethod(char *method) {
 }
 
 int parseHeaderLine(Stream *stream, Header *header, char line[BUFF_SIZE]) {
-  if (fillStream(stream) != 0) {
-    return -1;
-  }
-
-  if (consumeLine(stream, line, BUFF_SIZE) != 1) {
+  if (consumeLine(stream, line, BUFF_SIZE) != STREAM_OK) {
     fprintf(stderr, "ERROR: consumeLine\n");
     return -1;
   }
 
-	if (line[0] == '\0') {
-		fprintf(stderr, "WARNING: CRLF encountered. \n");
-		return -1;
-	}
+  if (isCRLFLine(line)) {
+    fprintf(stderr, "WARNING: CRLF encountered. \n");
+    return 1;
+  }
 
   char *name = line;
   char *value = strchr(name, ' ');
@@ -225,7 +242,11 @@ int parseHeaderLine(Stream *stream, Header *header, char line[BUFF_SIZE]) {
     fprintf(stderr, "ERROR: get pointer\n");
     return -1;
   }
+
   *value++ = '\0';
+
+	// strip the CRLF
+	value[strlen(value) - 2] = '\0'; 
 
   name[strlen(name) - 1] = '\0';
 
@@ -233,4 +254,46 @@ int parseHeaderLine(Stream *stream, Header *header, char line[BUFF_SIZE]) {
   header->value = strdup(value);
 
   return 0;
+}
+
+void printRequest(Request *request) {
+  fprintf(stderr, "Request: \n");
+  fprintf(stderr, "\turi: %s\n", request->uri);
+  fprintf(stderr, "\tversion: %s\n", request->version);
+
+  printHeader(request->header);
+
+  fprintf(stderr, "\tbody: %s\n", request->body);
+}
+
+void printHeader(Header *header) {
+  fprintf(stderr, "\tHeader: \n");
+
+  Header *ptr = header;
+  while (ptr != NULL) {
+    fprintf(stderr, "\t\t%s: %s\n", ptr->name, ptr->value);
+    ptr = ptr->next;
+  }
+}
+
+bool isCRLFLine(char *line) {
+	if (line[0] == '\r' && line[1] == '\n') {
+		return true;
+	}
+
+	return false;
+}
+
+char *getHeaderValue(Header *head, char *name) {
+	Header *ptr = head;
+
+	while (ptr != NULL) {
+		if (strcasecmp(ptr->name, name) == 0) {
+			return ptr->value;
+		}
+
+		ptr = ptr->next;
+	}
+
+	return NULL;
 }

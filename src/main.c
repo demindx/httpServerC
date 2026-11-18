@@ -2,10 +2,13 @@
 #include "server.h"
 #include <stdio.h>
 
-void test_handler(Request *request) {
+Response *test_handler(Request *request) {
 	printf("Hello from handler\n");
 	fflush(stdout);
+
+	return NULL;
 }
+
 
 int main() {
 	HttpServer *server = createServer("127.0.0.1", 8082);

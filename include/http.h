@@ -26,6 +26,8 @@ typedef struct Response {
   char *version;
   HttpStatus status;
 
+  Header *header;
+
   char *body;
 } Response;
 
@@ -40,8 +42,13 @@ typedef struct {
 } Request;
 
 Header *createHeader(const char *name, const char *value);
+char *getHeaderValue(Header *head, char *name);
+
 void addHeader(Header *head, Header *header);
 void freeHeader(Header *head);
 
 Request *readRequest(Stream *stream);
 Response *createResponse();
+
+
+void printRequest(Request *request);

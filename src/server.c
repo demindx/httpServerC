@@ -9,8 +9,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -30,14 +30,7 @@ struct HandleParam {
   HttpServer *server;
 };
 
-static sig_atomic_t shouldRun;
-
-static void signalHandler(int signo) {
-  if (signo == SIGTERM) {
-    signal(signo, SIG_IGN);
-    shouldRun = 0;
-  }
-}
+sig_atomic_t shouldRun = 1;
 
 static void *handle(void *arg) {
   struct HandleParam *params = (struct HandleParam *)arg;
@@ -48,7 +41,7 @@ static void *handle(void *arg) {
   if (params->client_fd <= 0)
     return 0;
 
-  fprintf(stdout, "[%02lx] handling a connection\n", pthread_self());
+  fprintf(stdout, "[%02lx]: handling a connection\n", pthread_self());
   fflush(stdout);
 
   bool run = true;
@@ -57,6 +50,8 @@ static void *handle(void *arg) {
     Stream *stream = createStream(params->client_fd);
 
     Request *request = readRequest(stream);
+
+		printRequest(request);
 
     if (!request)
       continue;
@@ -91,7 +86,7 @@ HttpServer *createServer(char *addr, int port) {
     return NULL;
   }
 
-  if ((server->socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+  if ((server->socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     perror("Error while creating socket: ");
     free(server);
     return NULL;
@@ -110,9 +105,18 @@ HttpServer *createServer(char *addr, int port) {
   if (bind(server->socket, (struct sockaddr *)&server->addr,
            sizeof(server->addr)) != 0) {
     perror("Error while binding socket: ");
+		close(server->socket);
     free(server);
     return NULL;
   }
+
+  if (listen(server->socket, 10) != 0) {
+    perror("Error while trying to listen socket: ");
+		close(server->socket);
+		free(server);
+		return NULL;
+  }
+
 
   return server;
 }
@@ -126,16 +130,8 @@ void setRouter(HttpServer *server, Router *router) {
 }
 
 void serve(HttpServer *server) {
-  shouldRun = 1;
-  if (listen(server->socket, 5) != 0) {
-    perror("Error while trying to listen socket: ");
-    return;
-  }
-
-  signal(SIGTERM, signalHandler);
-
-  int client_fd;
-  struct sockaddr_in client_addr;
+	int client_fd;
+	struct sockaddr_in client_addr;
   socklen_t client_addr_len = sizeof(client_addr);
   memset(&client_addr, 0, sizeof(client_addr));
 
@@ -154,7 +150,5 @@ void serve(HttpServer *server) {
     pthread_t thread = {0};
     pthread_create(&thread, 0, handle, args);
 
-    /* TODO: keep references to handler threads, and join them
-     * before terminating */
   }
 }
