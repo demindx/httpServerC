@@ -15,3 +15,4 @@ void *arenaPush(MemoryArena *arena, size_t size, bool non_zero);
 void arenaPop(MemoryArena *arena, size_t size);
 void arenaClear(MemoryArena *arena);
 void arenaFree(MemoryArena *arena);
+char *arenaStrdup(MemoryArena *arena, char *src);

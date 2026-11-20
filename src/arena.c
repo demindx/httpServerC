@@ -77,3 +77,14 @@ void arenaFree(MemoryArena *arena) {
 
   free(arena);
 }
+
+char *arenaStrdup(MemoryArena *arena, char *src){
+	size_t len = strlen(src) + 1;
+	char *copy = (char *)arenaPush(arena, len, false);
+
+	if (copy != NULL) {
+		memcpy(copy, src, len);
+	}
+
+	return copy;
+}
