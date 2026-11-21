@@ -1,4 +1,5 @@
 #pragma once
+#include "arena.h"
 #include <stdlib.h>
 
 typedef enum {
@@ -11,9 +12,7 @@ typedef enum {
 
 typedef struct Stream Stream;
 
-Stream *createStream(int fd);
-
-void freeStream(Stream *stream);
+Stream *createStream(MemoryArena *arena, int fd);
 
 int consumeLine(Stream *stream, char *out, size_t out_size);
 

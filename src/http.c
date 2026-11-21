@@ -1,16 +1,16 @@
-#include <strings.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "arena.h"
 #include "http.h"
 #include "stream.h"
-#include "arena.h"
 
 #define BUFF_SIZE 8192
 
@@ -25,17 +25,17 @@ struct Header {
   Header *prev;
 };
 
-
 bool isCRLFLine(char *line);
 void printHeader(Header *header);
-int parseRequestLine(Stream *stream, Request *request);
-int parseHeaderLine(Stream *stream, Header *header, char line[BUFF_SIZE]);
+int parseRequestLine(MemoryArena *arena, Stream *stream, Request *request);
+int parseHeaderLine(MemoryArena *arena, Stream *stream, Header *header,
+                    char line[BUFF_SIZE]);
 
-Header *readHeader(Stream *stream);
+Header *readHeader(MemoryArena *arena, Stream *stream);
 HttpMethod getMethod(char *method);
 
-Header *createHeader(const char *name, const char *value) {
-  Header *header = malloc(sizeof(Header));
+Header *createHeader(MemoryArena *arena, char *name, char *value) {
+  Header *header = (Header *)arenaPush(arena, sizeof(Header), false);
   if (header == NULL) {
     return NULL;
   }
@@ -44,16 +44,13 @@ Header *createHeader(const char *name, const char *value) {
     return header;
   }
 
-  header->name = strdup(name);
+  header->name = arenaStrdup(arena, name);
   if (header->name == NULL) {
-    free(header);
     return NULL;
   }
 
-  header->value = strdup(value);
+  header->value = arenaStrdup(arena, value);
   if (header->value == NULL) {
-    free(header->name);
-    free(header);
     return NULL;
   }
 
@@ -96,20 +93,20 @@ void freeHeader(Header *head) {
   }
 }
 
-Header *readHeader(Stream *stream) {
-  Header *head = createHeader(NULL, NULL);
+Header *readHeader(MemoryArena *arena, Stream *stream) {
+  Header *head = createHeader(arena, NULL, NULL);
 
   char line[BUFF_SIZE];
-  int ok = parseHeaderLine(stream, head, line);
+  int ok = parseHeaderLine(arena, stream, head, line);
 
   if (ok != 0) {
     return NULL;
   }
 
   while (true) {
-    Header *header = createHeader(NULL, NULL);
+    Header *header = createHeader(arena, NULL, NULL);
 
-    ok = parseHeaderLine(stream, header, line);
+    ok = parseHeaderLine(arena, stream, header, line);
 
     if (ok != 0) {
       break;
@@ -121,53 +118,45 @@ Header *readHeader(Stream *stream) {
   return head;
 }
 
-Request *readRequest(Stream *stream) {
-  Request *request = malloc(sizeof(Request));
+Request *readRequest(MemoryArena *arena, Stream *stream) {
+  Request *request = (Request *)arenaPush(arena, sizeof(Request), false);
   if (request == NULL) {
     fprintf(stderr, "ERROR(readRequest): cannot alocate request\n");
     return NULL;
   }
 
-  int status = parseRequestLine(stream, request);
+  int status = parseRequestLine(arena, stream, request);
   if (status != 0) {
     fprintf(stderr,
             "ERROR(readRequest): error while parsing the request line: %d\n",
             status);
-    free(request);
     return NULL;
   }
 
-  request->header = readHeader(stream);
+  request->header = readHeader(arena, stream);
 
+  char *endptr;
+  char *value = getHeaderValue(request->header, "content-length");
+  if (value == NULL) {
+    return request;
+  }
 
-	char *endptr;
-	char *value = getHeaderValue(request->header, "content-length");
-	if (value == NULL) {
-		return request;
-	}
+  long contentLength;
 
-	long contentLength;
+  contentLength = strtol(value, &endptr, 10);
+  if (endptr == value) {
+    fprintf(stderr, "ERROR(Stream): while converting the str to long.\n");
+    return NULL;
+  }
 
-	contentLength = strtol(value, &endptr, 10);
-	if (endptr == value) {
-		fprintf(stderr, "ERROR(Stream): while converting the str to long.\n");
-		freeHeader(request->header);
-		free(request->uri);
-		free(request->version);
-		return NULL;
-	}
+  request->body = (char *)arenaPush(arena, sizeof(char) * (contentLength + 1), false);
 
-	request->body = (char *)malloc(sizeof(char) * (contentLength + 1));
+  StreamStatus st;
+  size_t readed = readFromStream(stream, request->body, contentLength, &st);
 
-	StreamStatus st;
-	size_t readed = readFromStream(stream, request->body, contentLength, &st);
-
-	if (st != STREAM_OK) {
-		fprintf(stderr, "ERROR(Stream): while reading the body.\n");
-		freeHeader(request->header);
-		free(request->uri);
-		free(request->version);
-	}
+  if (st != STREAM_OK) {
+    fprintf(stderr, "ERROR(Stream): while reading the body.\n");
+  }
 
   return request;
 }
@@ -182,7 +171,7 @@ int parseHttpMethod(char *buff) {
   return -1;
 }
 
-int parseRequestLine(Stream *stream, Request *request) {
+int parseRequestLine(MemoryArena *arena, Stream *stream, Request *request) {
   char line[BUFF_SIZE];
 
   if (consumeLine(stream, line, BUFF_SIZE) != STREAM_OK) {
@@ -203,13 +192,12 @@ int parseRequestLine(Stream *stream, Request *request) {
   }
   *version++ = '\0';
 
-	// strip the CRLF
-	version[strlen(version) - 2] = '\0';
-
+  // strip the CRLF
+  version[strlen(version) - 2] = '\0';
 
   request->method = getMethod(method);
-  request->version = strdup(version);
-  request->uri = strdup(uri);
+  request->version = arenaStrdup(arena, version);
+  request->uri = arenaStrdup(arena, uri);
 
   return 0;
 }
@@ -224,7 +212,8 @@ HttpMethod getMethod(char *method) {
   return -1;
 }
 
-int parseHeaderLine(Stream *stream, Header *header, char line[BUFF_SIZE]) {
+int parseHeaderLine(MemoryArena *arena, Stream *stream, Header *header,
+                    char line[BUFF_SIZE]) {
   if (consumeLine(stream, line, BUFF_SIZE) != STREAM_OK) {
     fprintf(stderr, "ERROR: consumeLine\n");
     return -1;
@@ -245,13 +234,13 @@ int parseHeaderLine(Stream *stream, Header *header, char line[BUFF_SIZE]) {
 
   *value++ = '\0';
 
-	// strip the CRLF
-	value[strlen(value) - 2] = '\0'; 
+  // strip the CRLF
+  value[strlen(value) - 2] = '\0';
 
   name[strlen(name) - 1] = '\0';
 
-  header->name = strdup(name);
-  header->value = strdup(value);
+  header->name = arenaStrdup(arena, name);
+  header->value = arenaStrdup(arena, value);
 
   return 0;
 }
@@ -277,23 +266,23 @@ void printHeader(Header *header) {
 }
 
 bool isCRLFLine(char *line) {
-	if (line[0] == '\r' && line[1] == '\n') {
-		return true;
-	}
+  if (line[0] == '\r' && line[1] == '\n') {
+    return true;
+  }
 
-	return false;
+  return false;
 }
 
 char *getHeaderValue(Header *head, char *name) {
-	Header *ptr = head;
+  Header *ptr = head;
 
-	while (ptr != NULL) {
-		if (strcasecmp(ptr->name, name) == 0) {
-			return ptr->value;
-		}
+  while (ptr != NULL) {
+    if (strcasecmp(ptr->name, name) == 0) {
+      return ptr->value;
+    }
 
-		ptr = ptr->next;
-	}
+    ptr = ptr->next;
+  }
 
-	return NULL;
+  return NULL;
 }

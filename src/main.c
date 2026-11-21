@@ -28,6 +28,6 @@ int main() {
 
 	serve(server);
 
-	freeRouter(router);
+	freeServer(server);
 	return 0;
 }

@@ -11,6 +11,7 @@
 #include <sys/types.h>
 
 #include "stream.h"
+#include "arena.h"
 
 #define BUFF_SIZE 8192
 
@@ -24,8 +25,8 @@ void shiftBuff(Stream *stream, size_t from);
 
 StreamStatus fill(Stream *stream);
 
-Stream *createStream(int fd) {
-  Stream *stream = (Stream *)malloc(sizeof(Stream));
+Stream *createStream(MemoryArena *arena,int fd) {
+  Stream *stream = (Stream *)arenaPush(arena, sizeof(Stream), false);
 
   if (stream == NULL) {
     fprintf(stderr, "ERROR(Stream): failed to alocate the stream.\n");

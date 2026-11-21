@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arena.h"
 #include "status.h"
 #include "stream.h"
 
@@ -41,14 +42,12 @@ typedef struct {
   char *body;
 } Request;
 
-Header *createHeader(const char *name, const char *value);
+Header *createHeader(MemoryArena *arena, char *name, char *value);
 char *getHeaderValue(Header *head, char *name);
 
 void addHeader(Header *head, Header *header);
-void freeHeader(Header *head);
 
-Request *readRequest(Stream *stream);
-Response *createResponse();
-
+Request *readRequest(MemoryArena *arena, Stream *stream);
+Response *createResponse(MemoryArena *arena);
 
 void printRequest(Request *request);
