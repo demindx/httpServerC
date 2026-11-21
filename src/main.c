@@ -9,6 +9,12 @@ Response *test_handler(Request *request) {
 	return NULL;
 }
 
+Response *test_hello(Request *request) {
+	printf("HELLO YOLOO\n");
+	fflush(stdout);
+
+	return NULL;
+}
 
 int main() {
 	HttpServer *server = createServer("127.0.0.1", 8082);
@@ -23,7 +29,8 @@ int main() {
 		return 1;
 	}
 
-	registerRoute(router, GET, "/test", test_handler);
+	registerRoute(router, POST, "/test", test_handler);
+	registerRoute(router, GET, "/hello", test_hello);
 	setRouter(server, router);
 
 	serve(server);

@@ -7,7 +7,7 @@
 #define METHODS_LENGTH 10
 
 typedef enum {
-  GET,
+  GET = 0,
   POST,
   PUT,
   PATCH,

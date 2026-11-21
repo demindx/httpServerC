@@ -149,7 +149,8 @@ Request *readRequest(MemoryArena *arena, Stream *stream) {
     return NULL;
   }
 
-  request->body = (char *)arenaPush(arena, sizeof(char) * (contentLength + 1), false);
+  request->body =
+      (char *)arenaPush(arena, sizeof(char) * (contentLength + 1), false);
 
   StreamStatus st;
   size_t readed = readFromStream(stream, request->body, contentLength, &st);

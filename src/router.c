@@ -44,6 +44,7 @@ Route *createRoute(HttpMethod method, char *uri,
   }
 
   route->handler = handler;
+  route->method = method;
 
   return route;
 }
@@ -124,6 +125,8 @@ Route *getRouteByUri(Router *router, char *uri) {
 
 void callRouteHandler(Request *request, Router *router) {
   Route *route = getRouteByUri(router, request->uri);
+
+  fprintf(stderr, "Methods %d:%d\n", request->method, route->method);
 
   if (request->method != route->method) {
     fprintf(stderr, "ERROR: bad request method");
