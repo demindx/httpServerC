@@ -1,12 +1,13 @@
 #pragma once
 
+#include "arena.h"
 #include "status.h"
 #include "stream.h"
 
 #define METHODS_LENGTH 10
 
 typedef enum {
-  GET,
+  GET = 0,
   POST,
   PUT,
   PATCH,
@@ -26,6 +27,8 @@ typedef struct Response {
   char *version;
   HttpStatus status;
 
+  Header *header;
+
   char *body;
 } Response;
 
@@ -39,9 +42,12 @@ typedef struct {
   char *body;
 } Request;
 
-Header *createHeader(const char *name, const char *value);
-void addHeader(Header *head, Header *header);
-void freeHeader(Header *head);
+Header *createHeader(MemoryArena *arena, char *name, char *value);
+char *getHeaderValue(Header *head, char *name);
 
-Request *readRequest(Stream *stream);
-Response *createResponse();
+void addHeader(Header *head, Header *header);
+
+Request *readRequest(MemoryArena *arena, Stream *stream);
+Response *createResponse(MemoryArena *arena);
+
+void printRequest(Request *request);

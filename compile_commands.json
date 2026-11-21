@@ -1,0 +1,107 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-ggdb",
+      "-std=c23",
+      "-Iinclude/",
+      "-c",
+      "-o",
+      "build/http.o",
+      "src/http.c"
+    ],
+    "directory": "/home/demindx/Documents/httpServerC",
+    "file": "/home/demindx/Documents/httpServerC/src/http.c",
+    "output": "/home/demindx/Documents/httpServerC/build/http.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-ggdb",
+      "-std=c23",
+      "-Iinclude/",
+      "-c",
+      "-o",
+      "build/main.o",
+      "src/main.c"
+    ],
+    "directory": "/home/demindx/Documents/httpServerC",
+    "file": "/home/demindx/Documents/httpServerC/src/main.c",
+    "output": "/home/demindx/Documents/httpServerC/build/main.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-ggdb",
+      "-std=c23",
+      "-Iinclude/",
+      "-c",
+      "-o",
+      "build/router.o",
+      "src/router.c"
+    ],
+    "directory": "/home/demindx/Documents/httpServerC",
+    "file": "/home/demindx/Documents/httpServerC/src/router.c",
+    "output": "/home/demindx/Documents/httpServerC/build/router.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-ggdb",
+      "-std=c23",
+      "-Iinclude/",
+      "-c",
+      "-o",
+      "build/server.o",
+      "src/server.c"
+    ],
+    "directory": "/home/demindx/Documents/httpServerC",
+    "file": "/home/demindx/Documents/httpServerC/src/server.c",
+    "output": "/home/demindx/Documents/httpServerC/build/server.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-ggdb",
+      "-std=c23",
+      "-Iinclude/",
+      "-c",
+      "-o",
+      "build/stack.o",
+      "src/stack.c"
+    ],
+    "directory": "/home/demindx/Documents/httpServerC",
+    "file": "/home/demindx/Documents/httpServerC/src/stack.c",
+    "output": "/home/demindx/Documents/httpServerC/build/stack.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-ggdb",
+      "-std=c23",
+      "-Iinclude/",
+      "-c",
+      "-o",
+      "build/stream.o",
+      "src/stream.c"
+    ],
+    "directory": "/home/demindx/Documents/httpServerC",
+    "file": "/home/demindx/Documents/httpServerC/src/stream.c",
+    "output": "/home/demindx/Documents/httpServerC/build/stream.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-ggdb",
+      "-std=c23",
+      "-Iinclude/",
+      "-c",
+      "-o",
+      "build/worker.o",
+      "src/worker.c"
+    ],
+    "directory": "/home/demindx/Documents/httpServerC",
+    "file": "/home/demindx/Documents/httpServerC/src/worker.c",
+    "output": "/home/demindx/Documents/httpServerC/build/worker.o"
+  }
+]

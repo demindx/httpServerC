@@ -11,13 +11,14 @@ struct Router {
 struct Route {
   HttpMethod method;
   char *uri;
-  void (*handler)(Request *);
+  Response *(*handler)(Request *);
   struct Route *next;
 };
 
 Route *getRouteByUri(Router *router, char *uri);
 
-Route *createRoute(HttpMethod method, char *uri, void (*handler)(Request *)) {
+Route *createRoute(HttpMethod method, char *uri,
+                   Response *(*handler)(Request *)) {
   if (uri == NULL) {
     fprintf(stderr, "Incorrect uri\n");
     return NULL;
@@ -43,6 +44,7 @@ Route *createRoute(HttpMethod method, char *uri, void (*handler)(Request *)) {
   }
 
   route->handler = handler;
+  route->method = method;
 
   return route;
 }
@@ -60,7 +62,7 @@ Router *createRouter() {
 }
 
 int registerRoute(Router *router, HttpMethod method, char *uri,
-                  void (*handler)(Request *)) {
+                  Response *(*handler)(Request *)) {
   if (router == NULL) {
     fprintf(stderr, "Router cannot be NULL\n");
     return 0;
@@ -123,6 +125,8 @@ Route *getRouteByUri(Router *router, char *uri) {
 
 void callRouteHandler(Request *request, Router *router) {
   Route *route = getRouteByUri(router, request->uri);
+
+  fprintf(stderr, "Methods %d:%d\n", request->method, route->method);
 
   if (request->method != route->method) {
     fprintf(stderr, "ERROR: bad request method");

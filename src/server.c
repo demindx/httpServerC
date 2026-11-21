@@ -1,4 +1,5 @@
 #include "server.h"
+#include "arena.h"
 #include "http.h"
 #include "router.h"
 #include "stream.h"
@@ -30,17 +31,23 @@ struct HandleParam {
   HttpServer *server;
 };
 
-static sig_atomic_t shouldRun;
+sig_atomic_t shouldRun = 1;
 
-static void signalHandler(int signo) {
-  if (signo == SIGTERM) {
-    signal(signo, SIG_IGN);
-    shouldRun = 0;
-  }
+
+void sigHandler(int signal) {
+	fprintf(stderr, "SIGINT Encountered stoping server.\n");
+	if (shouldRun) {
+		shouldRun = 0;
+	}
 }
 
 static void *handle(void *arg) {
   struct HandleParam *params = (struct HandleParam *)arg;
+
+  MemoryArena *arena = createArena(MiB(5));
+  if (arena == NULL) {
+    return 0;
+  }
 
   if (!params->server)
     return 0;
@@ -48,28 +55,28 @@ static void *handle(void *arg) {
   if (params->client_fd <= 0)
     return 0;
 
-  fprintf(stdout, "[%02lx] handling a connection\n", pthread_self());
+  fprintf(stdout, "[%02lx]: handling a connection\n", pthread_self());
   fflush(stdout);
 
   bool run = true;
 
   while (run) {
-    Stream *stream = createStream(params->client_fd);
+    Stream *stream = createStream(arena, params->client_fd);
 
-    Request *request = readRequest(stream);
+    Request *request = readRequest(arena, stream);
+
+    printRequest(request);
 
     if (!request)
       continue;
 
     callRouteHandler(request, params->server->router);
 
-		run = false;
-
-		freeStream(stream);
+    run = false;
   }
 
-
   close(params->client_fd);
+  arenaFree(arena);
   fprintf(stdout, "[%02lx] connection closed\n", pthread_self());
   return 0;
 }
@@ -91,7 +98,7 @@ HttpServer *createServer(char *addr, int port) {
     return NULL;
   }
 
-  if ((server->socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+  if ((server->socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     perror("Error while creating socket: ");
     free(server);
     return NULL;
@@ -110,6 +117,14 @@ HttpServer *createServer(char *addr, int port) {
   if (bind(server->socket, (struct sockaddr *)&server->addr,
            sizeof(server->addr)) != 0) {
     perror("Error while binding socket: ");
+    close(server->socket);
+    free(server);
+    return NULL;
+  }
+
+  if (listen(server->socket, 10) != 0) {
+    perror("Error while trying to listen socket: ");
+    close(server->socket);
     free(server);
     return NULL;
   }
@@ -126,18 +141,12 @@ void setRouter(HttpServer *server, Router *router) {
 }
 
 void serve(HttpServer *server) {
-  shouldRun = 1;
-  if (listen(server->socket, 5) != 0) {
-    perror("Error while trying to listen socket: ");
-    return;
-  }
-
-  signal(SIGTERM, signalHandler);
-
   int client_fd;
   struct sockaddr_in client_addr;
   socklen_t client_addr_len = sizeof(client_addr);
   memset(&client_addr, 0, sizeof(client_addr));
+
+	signal(SIGINT, sigHandler);
 
   while (shouldRun) {
     if ((client_fd = accept(server->socket, (struct sockaddr *)&client_addr,
@@ -147,14 +156,19 @@ void serve(HttpServer *server) {
       break;
     }
 
-    struct HandleParam *args = malloc(sizeof(struct HandleParam));
-    args->client_fd = client_fd;
-    args->server = server;
+    struct HandleParam args;
+    args.client_fd = client_fd;
+    args.server = server;
 
     pthread_t thread = {0};
-    pthread_create(&thread, 0, handle, args);
-
-    /* TODO: keep references to handler threads, and join them
-     * before terminating */
+    pthread_create(&thread, 0, handle, &args);
   }
+}
+
+void freeServer(HttpServer *server) {
+	if (server == NULL) {
+		return;
+	}
+	freeRouter(server->router);
+	free(server);
 }

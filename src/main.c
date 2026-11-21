@@ -2,9 +2,18 @@
 #include "server.h"
 #include <stdio.h>
 
-void test_handler(Request *request) {
+Response *test_handler(Request *request) {
 	printf("Hello from handler\n");
 	fflush(stdout);
+
+	return NULL;
+}
+
+Response *test_hello(Request *request) {
+	printf("HELLO YOLOO\n");
+	fflush(stdout);
+
+	return NULL;
 }
 
 int main() {
@@ -20,11 +29,12 @@ int main() {
 		return 1;
 	}
 
-	registerRoute(router, GET, "/test", test_handler);
+	registerRoute(router, POST, "/test", test_handler);
+	registerRoute(router, GET, "/hello", test_hello);
 	setRouter(server, router);
 
 	serve(server);
 
-	freeRouter(router);
+	freeServer(server);
 	return 0;
 }
